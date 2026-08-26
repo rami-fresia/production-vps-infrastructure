@@ -109,17 +109,19 @@ Respaldo automático de la base de datos configurado y en operación:
 - **Retención:** 14 días (rotación automática de respaldos viejos).
 - **Control de acceso:** credenciales de aplicación **restringidas al bucket**
   (principio de mínimo privilegio); bucket privado.
-- **Prueba de restauración:** `[COMPLETAR: pendiente — probar un restore end-to-end]`
+- **Prueba de restauración:** pendiente — probar un restore end-to-end.
 
-Respaldo de Supabase (bases de datos de aplicaciones):
+Resumen del estado de backups:
 
-- **Alcance:** el servidor hostea **3 proyectos Supabase independientes** (métricas de
-  Instagram, CRM de prospectos y agenda/turnos), cada uno con su propia base de datos.
-- **Método:** export con `pg_dumpall` desde cada contenedor de base de datos y subida a
-  Backblaze B2 mediante **rclone**, con verificación del tamaño del dump y listado de
-  confirmación de la subida.
-- **Estado:** respaldo **manual** de las **3 bases** realizado y verificado. Automatización
-  de este flujo pendiente (roadmap).
+| Base | Frecuencia | Destino | Estado |
+|------|-----------|---------|--------|
+| PostgreSQL de n8n | Diario 2 AM | Backblaze B2 (externo, cifrado) | ✅ Automático |
+| Supabase — métricas, CRM, agenda | Diario 3 AM | Backblaze B2 (externo) | ✅ Automático (script + cron) |
+| CRM de prospectos | Diario 4:30 AM | Disco local | ⚠️ Automático, pendiente migrar a externo |
+
+Método para Supabase: `pg_dumpall` desde cada contenedor + subida con `rclone`,
+verificación del dump y de la subida antes de dar por válido el backup. Retención
+local de 7 días (limpieza automática vía `find`).
 
 ---
 
