@@ -1,189 +1,113 @@
-# Infraestructura de Producción — VPS de Automatizaciones y Servicios
+# Infraestructura de producción en un VPS
 
-Administración autogestionada de un servidor VPS en producción que hostea las
-automatizaciones, integraciones y servicios de mensajería de una agencia de
-marketing. El servidor opera con usuarios y tráfico reales de forma continua
-desde marzo de 2026.
+Administración de punta a punta de un servidor VPS en producción que hostea las automatizaciones, bases de datos e integraciones de una agencia de marketing. Opera con usuarios y tráfico reales de forma continua desde marzo de 2026, con un solo administrador.
 
-> **Rol:** administración, configuración, orquestación y mantenimiento del
-> servidor, los contenedores y los servicios que corren sobre él. Un solo
-> administrador.
-
-<!--
-NOTA DE OPSEC / PRIVACIDAD (borrá este comentario antes de publicar):
-- NO pongas la IP real del servidor, ni el dominio real del cliente, ni puertos exactos.
-- NO subas credenciales, tokens, .env, ni capturas con datos sensibles.
-- Si mostrás capturas, tapá IPs, dominios de clientes y nombres de usuarios reales.
-- Podés reemplazar "una agencia de marketing" por el nombre real si querés.
-Documentar bien SIN filtrar nada ya es, en sí mismo, una señal de que sabés lo que hacés.
--->
-
----
-
-## Resumen
-
-Administro de punta a punta un VPS en producción: sistema operativo, contenedores,
-seguridad, backups y mantenimiento. Sobre él corren flujos de automatización, bases
-de datos e integraciones con APIs externas que dan servicio real a una agencia de
-marketing.
-
-- **Estado:** en producción continua desde **marzo de 2026** (+5 meses)
-- **Gestión:** un solo administrador
-- **Recursos:** 4 núcleos de CPU · 8 GB RAM · ~145 GB de disco (38% en uso, ~91 GB
-  libres), con utilización holgada
-- **Uptime:** +68 días de operación continua sin interrupciones (a la fecha de esta doc)
-
----
+| Dato | Valor |
+|------|-------|
+| En producción desde | marzo de 2026 |
+| Uptime continuo | más de 100 días (a octubre de 2026) |
+| Workflows de n8n activos | 18 |
+| Recursos | 4 vCPU, 8 GB RAM, 145 GB de disco (~40% en uso) |
+| Sistema operativo | Ubuntu 24.04 LTS |
 
 ## Arquitectura
 
 ```mermaid
 flowchart LR
-    subgraph VPS["VPS Contabo · Docker · EasyPanel"]
-        RP["Reverse Proxy + SSL<br/>(Traefik / Let's Encrypt)"]
+    subgraph VPS["VPS · Docker · EasyPanel"]
+        RP["Reverse proxy + TLS<br/>(Traefik / Let's Encrypt)"]
         N8N["n8n<br/>automatizaciones"]
         PG["PostgreSQL<br/>(datos de n8n)"]
         REDIS["Redis<br/>(cola de n8n)"]
-        SUPA["Supabase<br/>(backend de apps)"]
+        SUPA["Supabase self-hosted<br/>(backend de métricas)"]
         RP --> N8N
         RP --> SUPA
         N8N --> PG
         N8N --> REDIS
+        N8N --> SUPA
     end
     N8N --> YC["WhatsApp Business API<br/>(YCloud)"]
+    N8N --> ZOHO["Zoho Books API"]
     N8N --> META["Meta Graph API"]
     N8N --> GOOG["Google Workspace APIs"]
-    N8N --> CLAUDE["Claude API"]
-    PG -->|backup diario cifrado| B2["Backblaze B2<br/>(S3 externo)"]
+    PG -->|backup diario| B2["Backblaze B2<br/>(storage externo)"]
+    SUPA -->|backup diario| B2
 ```
 
----
+## Stack
 
-## Stack tecnológico
+| Categoría | Tecnología | Rol |
+|-----------|------------|-----|
+| Sistema operativo | Ubuntu 24.04 LTS | Base del servidor |
+| Contenedores | Docker | Aislamiento y despliegue de cada servicio |
+| Orquestación | EasyPanel | Despliegues, dominios y reverse proxy |
+| Reverse proxy + TLS | Traefik + Let's Encrypt | HTTPS y certificados automáticos |
+| Automatización | n8n (self-hosted) | Integraciones y lógica de negocio |
+| Bases de datos | PostgreSQL, Supabase | Datos de n8n y backend de aplicaciones |
+| Cola | Redis | Ejecuciones de n8n |
+| Mensajería | WhatsApp Business API (YCloud) | Canal oficial de WhatsApp |
+| Backups | rclone + Backblaze B2 | Respaldo externo |
 
-| Categoría               | Tecnología                                   | Rol                                              |
-|-------------------------|----------------------------------------------|--------------------------------------------------|
-| Hosting                 | Contabo VPS                                  | Servidor en la nube                              |
-| Sistema operativo       | Ubuntu 24.04 LTS (Noble Numbat)              | Base del servidor                                |
-| Contenedores            | Docker                                       | Aislamiento y despliegue de cada servicio        |
-| Panel / orquestación    | EasyPanel                                    | Gestión de contenedores, despliegues y dominios  |
-| Reverse proxy + SSL     | Traefik + Let's Encrypt (vía EasyPanel)      | Enrutado HTTPS y certificados automáticos        |
-| Automatización          | n8n (self-hosted)                            | Flujos de integración y lógica de negocio        |
-| Base de datos           | PostgreSQL                                   | Persistencia de datos de n8n                     |
-| Cola / cache            | Redis                                        | Procesamiento de ejecuciones de n8n              |
-| Backend de aplicaciones | Supabase                                     | Base de datos, auth y storage para apps          |
-| Mensajería              | WhatsApp Business API (YCloud)               | Canal oficial de WhatsApp                        |
-| Integraciones externas  | Meta Graph API · Google Workspace · Claude API | Servicios consumidos por los flujos            |
-| Almacenamiento backups  | Backblaze B2 (S3-compatible)                 | Respaldo externo de la base de datos             |
+## Qué corre en el servidor
 
----
+- [Generación automática de remitos](https://github.com/rami-fresia/automatizacion-remitos) en Zoho Books (~29 por mes).
+- [Cobranza automática por WhatsApp](https://github.com/rami-fresia/automatizacion-cobranzas-whatsapp) (~115 mensajes por mes).
+- [Plataforma de métricas de Instagram](https://github.com/rami-fresia/instagram-metrics) (24 cuentas sincronizadas a diario).
+- Envío mensual de informes de métricas por WhatsApp.
 
-## Servicios y automatizaciones en producción
-
-Flujos de **n8n** activos:
-
-- **Recopilación de métricas** de redes sociales de clientes.
-- **Generación automática de recibos/remitos.**
-- **Envío de reportes e informes de métricas por WhatsApp.**
-- **Notificaciones/mensajería por WhatsApp** — migrado a la API oficial (ver
-  *Decisiones técnicas*); primeros envíos automáticos programados para esta semana.
-
-Servicios de soporte: **PostgreSQL** (almacena los workflows, credenciales e
-historial de ejecuciones de n8n) y **Redis** (cola de ejecuciones). **Supabase**
-provee el backend de aplicaciones: el servidor corre **3 proyectos Supabase
-independientes** (métricas de Instagram de clientes, CRM de prospectos y
-agenda/turnos), cada uno con su propia base de datos, autenticación y storage.
-
----
+En conjunto, estas automatizaciones liberan unas 6 horas por mes de trabajo administrativo.
 
 ## Backups
 
-Respaldo automático de la base de datos configurado y en operación:
+| Qué | Frecuencia | Destino |
+|-----|-----------|---------|
+| PostgreSQL de n8n (workflows, credenciales, historial) | Diario, 02:00 | Backblaze B2 |
+| Supabase de métricas (`pg_dumpall`) | Diario, 03:00 | Disco local (7 días) + Backblaze B2 |
+| Base del CRM comercial (export JSON/CSV) | Diario, 04:30 y 05:00 | Disco local + Backblaze B2 |
 
-- **Qué se respalda:** base de datos PostgreSQL (contiene todos los workflows,
-  credenciales e historial de n8n).
-- **Frecuencia:** diaria y automatizada (cron `0 2 * * *`, 02:00 hs).
-- **Destino:** almacenamiento externo S3 (**Backblaze B2**), **fuera del servidor** —
-  sobrevive a una falla total del VPS.
-- **Cifrado:** en reposo (Server-Side Encryption).
-- **Retención:** 14 días (rotación automática de respaldos viejos).
-- **Control de acceso:** credenciales de aplicación **restringidas al bucket**
-  (principio de mínimo privilegio); bucket privado.
-- **Prueba de restauración:** pendiente — probar un restore end-to-end.
-
-Resumen del estado de backups:
-
-| Base | Frecuencia | Destino | Estado |
-|------|-----------|---------|--------|
-| PostgreSQL de n8n | Diario 2 AM | Backblaze B2 (externo, cifrado) | ✅ Automático |
-| Supabase — métricas, CRM, agenda | Diario 3 AM | Backblaze B2 (externo) | ✅ Automático (script + cron) |
-| CRM de prospectos | Diario 4:30 AM | Disco local | ⚠️ Automático, pendiente migrar a externo |
-
-Método para Supabase: `pg_dumpall` desde cada contenedor + subida con `rclone`,
-verificación del dump y de la subida antes de dar por válido el backup. Retención
-local de 7 días (limpieza automática vía `find`).
-
----
+- **Fuera del servidor:** el destino es un proveedor distinto del hosting, así un respaldo sobrevive a la pérdida total del VPS.
+- **Verificación:** el script valida que el dump esté completo antes de subirlo, y la subida se controla con `rclone check`.
+- **Mínimo privilegio:** las credenciales de backup solo tienen acceso a un bucket privado.
+- **Restore probado** para la base del CRM.
 
 ## Seguridad
 
-Medidas implementadas:
+Implementado:
 
-- **TLS/SSL** en todos los servicios expuestos (Let's Encrypt vía Traefik).
-- **Backups cifrados** en reposo y almacenados fuera del servidor.
-- **Mínimo privilegio** en las credenciales de backup (acceso limitado a un solo bucket).
-- **2FA** habilitado en el panel de hosting (Contabo), con código de recuperación resguardado.
-- **Gestión de credenciales** centralizada en un gestor de contraseñas.
-- **Respaldos por línea de comandos** (`pg_dumpall` + `rclone` hacia S3) además de los
-  automáticos vía panel.
+- TLS en todos los servicios expuestos.
+- Firewall UFW activo.
+- Backups externos en un bucket privado con credenciales restringidas.
+- 2FA en el panel del proveedor de hosting.
+- Credenciales centralizadas en un gestor de contraseñas; nunca en repositorios.
+- Supabase con secreto JWT propio rotado y Row Level Security en todas las tablas (ver [instagram-metrics](https://github.com/rami-fresia/instagram-metrics)).
+- Error Workflows que avisan por mail, independientes del canal de WhatsApp.
 
-Roadmap de hardening (en implementación):
+En curso:
 
-- Endurecimiento del acceso SSH (autenticación por clave, deshabilitar login de root,
-  cambio de puerto por defecto).
-- Firewall (UFW) y bloqueo de fuerza bruta (fail2ban).
-- Auditoría periódica con **Lynis** y análisis de logs de intentos de acceso.
+- Hardening de SSH: autenticación solo por clave y sin login de root.
+- fail2ban contra fuerza bruta.
+- Auditoría periódica con Lynis.
+- Monitoreo de disponibilidad externo con alertas.
 
-> 🔗 Análisis de logs de ataques SSH reales y hardening de este servidor:
-> `[COMPLETAR: link al repo del proyecto de seguridad cuando lo tengas]`
+## Incidentes resueltos
 
----
+- **Caída total por presión de memoria:** diagnóstico del consumo por contenedor y restauración del servicio.
+- **Fallos recurrentes de DNS:** identificación de la causa y corrección.
+- **Número de WhatsApp restringido:** la integración no oficial (Evolution API) disparó una restricción por mensajería masiva. Diagnóstico con el estado real de entrega de cada mensaje y migración a la API oficial con plantillas aprobadas por Meta. Detalle en [automatizacion-cobranzas-whatsapp](https://github.com/rami-fresia/automatizacion-cobranzas-whatsapp).
 
-## Monitoreo y mantenimiento
+## Mantenimiento
 
-- **Monitoreo de recursos:** métricas de CPU, memoria, disco y red vía EasyPanel.
-- **Monitoreo de disponibilidad:** `[COMPLETAR: ej. Uptime Kuma — planificado]`
-- **Mantenimiento rutinario:** revisión de estado de servicios, uso de disco y
-  actualizaciones de contenedores. `[COMPLETAR: ajustá según tu rutina real]`
-
----
+- Limpieza programada de logs de Docker cada 6 horas para que no llenen el disco.
+- Monitoreo de CPU, memoria, disco y red desde EasyPanel.
+- Revisión periódica del estado de los workflows y de las ejecuciones fallidas.
 
 ## Decisiones técnicas
 
-*El "por qué" detrás del setup — completá/ajustá con tus propias razones.*
-
-- **Migración de WhatsApp a la API oficial:** inicialmente la mensajería corría sobre
-  **Evolution API** (solución no oficial). Meta detectó el patrón de envíos automáticos
-  y restringió el número. Migré el canal a la **API oficial de WhatsApp Business
-  mediante YCloud (BSP)**, con coexistencia y plantillas aprobadas por Meta, para tener
-  un canal estable y dentro de las políticas de la plataforma.
-- **Self-hosted sobre SaaS:** un VPS con costo fijo mensual resultó considerablemente
-  más económico que n8n Cloud, cuyo precio escala con el volumen de ejecuciones. Con
-  self-hosting el costo es previsible y no crece con el uso, además de dar control total
-  sobre los datos y sin límites de ejecuciones.
-- **EasyPanel sobre Docker Compose manual:** EasyPanel permite desplegar y gestionar
-  los servicios de forma visual (despliegue desde plantillas, manejo automático de SSL,
-  dominios y reverse proxy) sin necesidad de escribir y mantener archivos de
-  configuración a mano, lo que agiliza la administración del servidor.
-- **Backups a un proveedor externo y no en el mismo server:** un respaldo local no
-  protege ante la pérdida total del VPS; por eso el destino es un storage externo
-  independiente del hosting.
-
----
+- **Self-hosted en lugar de SaaS:** un VPS de costo fijo sale bastante menos que n8n Cloud, que cobra por volumen de ejecuciones, y da control total sobre los datos.
+- **EasyPanel en lugar de Docker Compose a mano:** despliegues desde plantillas, SSL y dominios automáticos, menos configuración que mantener para un solo administrador.
+- **API oficial de WhatsApp en lugar de integraciones no oficiales:** estabilidad y cumplimiento de las políticas de Meta, a cambio de un costo por mensaje bajo (~USD 4 por mes).
+- **Backups en otro proveedor:** un backup en el mismo servidor no protege contra la pérdida del servidor.
 
 ## Sobre este repositorio
 
-Este README documenta infraestructura real en producción con fines de portfolio.
-No contiene IPs, dominios de clientes, credenciales ni datos sensibles.
-
-**Contacto:** [github.com/rami-fresia](https://github.com/rami-fresia/Ramiro-Fresia)
+Documenta infraestructura real con fines de portfolio. No contiene IPs, dominios, puertos, credenciales ni datos de clientes.
